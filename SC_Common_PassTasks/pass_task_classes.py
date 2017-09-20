@@ -30,27 +30,43 @@ class Request(Bus):
             self.send_database_request(g_inc_details.format(self.inc_num))
             params_list = self.fetch_response_from_db_v2(self.cursor)[0]
             self.request_params = {'topic': re.sub(r'[0-9]', '#', params_list[0]).replace('<![CDATA[', '').replace(']]>', ''),
-                                   'descriptionInRTF': re.sub(r'[0-9]', '#',params_list[1]).replace('<![CDATA[', '').replace(']]>', ''),
+                                   'descriptionInRTF': re.sub(r'[0-9]', '#', params_list[1]).replace('<![CDATA[', '').replace(']]>', ''),
                                    'metaClass': "serviceCall$NewInc", 'impact': impactCode[params_list[4]],
-                                   'linkedINC': params_list[5], 'agreement': 'agreement$106028301',
-                                   'service': 'slmService$106028501'}
+                                   'linkedINC': params_list[5], 'agreement': 'agreement$7910401',
+                                   'service': 'slmService$7911201'}
         if u'TAS' in self.inc_num:
-            self.request_params = {}
+            self.request_params, meta_class = {}, None
             self.send_database_request(g_inc_details_oiv.format(self.inc_num))
             params_list = self.fetch_response_from_db_v2(self.cursor)[0]
             self.request_params = {'topic': re.sub(r'[0-9]', '#', params_list[0]).replace('<![CDATA[', '').replace(']]>', ''),
-                                   'descriptionInRTF': re.sub(r'[0-9]', '#',params_list[1]).replace('<![CDATA[', '').replace(']]>', ''),
-                                   'metaClass': "serviceCall$Consultation", 'impact': impactCode[params_list[4]],
+                                   'descriptionInRTF': re.sub(r'[0-9]', '#', params_list[1]).replace('<![CDATA[', '').replace(']]>', ''),
+                                   'metaClass': oiv_meta_class[params_list[9]],
+                                   'impact': impactCode[params_list[4]],
                                    'RespIsp0': params_list[6],
                                    'parentCall': params_list[7],
                                    'linkedINC': params_list[5],
-                                   'agreement': 'agreement$106028301', 'service': 'slmService$106028501', 'PriznakAutoSta': 'true',
+                                   'agreement': agreement_mapping[params_list[9]],
+                                   'service': usluga_mapping[params_list[9]],
+                                   'PriznakAutoSta': 'true',
                                    'SubIS': service_mapping[params_list[8]]}
-
+            self.send_database_request(g_integration_type.format(self.request_params['linkedINC']))
+            integration_type = self.fetch_response_from_db_v2(self.cursor)[0][0]
+            if integration_type != 5:
+                self.request_params.pop('parentCall')
+        req_check = self.create_req_instance(check_registered.format(linkedInc=self.request_params['linkedINC'],
+                                                                     metaClass=self.request_params['metaClass']
+                                                                     ), '', sc_native_url
+                                             )
+        check_response = self.send_req(req_check, 60).read().replace('ns1:', '')
+        check_result = [x for x in self.get_values_by_tag_name(check_response, 'string') if "serviceCall" in x]
         self.process = self.write_process("Got unprocessed ticket details", 0, self.process)
         if len(sc_num) > 0:
             sc_num = sc_num[0][0]
             self.pass_number(sc_num, self.ext_id)
+            self.process = self.write_process("Got created tickets", 0, self.process)
+            self.New = None
+        if len(check_result) > 0:
+            self.pass_number(check_result, self.ext_id)
             self.process = self.write_process("Got created tickets", 0, self.process)
             self.New = None
 
